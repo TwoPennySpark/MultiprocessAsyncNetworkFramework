@@ -1,26 +1,30 @@
-from netframe import Server, Connection, OwnedMessage
 import os
+import time
+
+from netframe import Server, Connection, OwnedMessage
+
+server = Server()
+
+@server.config.on_client_connect
+def on_client_connect(client: Connection) -> bool:
+    print(f"[{os.getpid()}][{client._id}]Client connected from {client.addr()}", flush=True)
+    return True
 
 
-class EchoServer(Server):
-    def __init__(self):
-        super().__init__()
+@server.config.on_client_disconnect
+def on_client_disconnect(client: Connection):
+    print(f"[{os.getpid()}]Client from {client.addr()} disconnected", flush=True)
 
-    
-    def on_client_connect(self, client: Connection) -> bool:
-        print(f"[{os.getpid()}]Client connected")
-        return True
-    
-    
-    def on_client_disconnect(self, client: Connection):
-        print(f"[{os.getpid()}]Client disconnected")
 
-        
-    def on_message(self, msg: OwnedMessage):
-        self.workerQueues[msg.workerId].put(msg)
+@server.config.on_message
+def on_message(msg: OwnedMessage):
+    print(f"[{os.getpid()}][{msg.owner._id}]ON_MSG:", msg.msg)
+    msg.owner.schedule_send(msg.msg)
 
 
 if __name__ == "__main__":
-    server = EchoServer()
-    server.start(54321, workerNum=10)
-    server.update()
+    server.start(port=54314, workerNum=2)
+
+    # user app
+    while True:
+        time.sleep(0.1)

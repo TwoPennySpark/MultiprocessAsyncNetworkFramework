@@ -1,5 +1,7 @@
+import os
 import socket
 import asyncio
+import functools
 from multiprocessing import Process, Queue
 
 from netframe.message import Message, OwnedMessage
@@ -8,6 +10,8 @@ from netframe.connection import Connection
 
 class Client:
     def __init__(self) -> None:
+        self.serverSock: socket.socket | None = None
+
         self.worker: Process | None = None
         self.loop: asyncio.BaseEventLoop | None = None
 
@@ -15,24 +19,25 @@ class Client:
         self.inQueue: Queue[OwnedMessage] = Queue()
         self.outQueue: Queue[Message] = Queue()
 
-        self.serverSock: socket.socket | None = None
-
 
     def connect(self, ip: str, port: int):
         self.serverSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.serverSock.set_inheritable(True)
         try:
             self.serverSock.connect((ip, port))
         except Exception as e:
             print("[-]connect failed", e)
             raise
 
-        self.worker = Process(target=self._work, daemon=True)
+        self.worker = Process(target=self._run, daemon=True)
         self.worker.start()
 
-
-    def _work(self):
-        self.loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.loop)
+    
+    def _run(self):
+        sockData = self.serverSock.share(os.getpid())
+        self.serverSock = socket.fromshare(sockData)
+        
+        self.loop = asyncio.get_event_loop()
         self.loop.create_task(self._start_client())
         self.loop.run_forever()
 
@@ -45,10 +50,9 @@ class Client:
 
 
     def _dequeue(self):
-        asyncio.set_event_loop(self.loop)
         while True:
             msg = self.outQueue.get()
-            asyncio.run_coroutine_threadsafe(self.connection.send(msg), self.loop)
+            self.loop.call_soon_threadsafe(functools.partial(self.connection.schedule_send, msg=msg))
 
 
     def send(self, msg: Message):
@@ -61,3 +65,4 @@ class Client:
 
     def shutdown(self):
         self.worker.terminate()
+        self.worker.join()

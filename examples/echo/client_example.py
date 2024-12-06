@@ -1,38 +1,50 @@
-import socket
+import os
 import time
+import socket
 
 from netframe.message import Message
 from netframe.client import Client
 
 from multiprocessing import Process
 
+import subprocess
 
-def client():
+
+def client(id):
     client = Client()
-    client.connect(ip=socket.gethostbyname(socket.gethostname()), port=54321)
+    addr = socket.gethostbyname(socket.gethostname())
+    client.connect(ip=addr, port=54314)
+
     start = time.perf_counter()
 
-    for i in range(1000):
+    for _ in range(1):
         msgSent = Message()
+        msgSent.hdr.id = id
         msgSent.append(b"hello")
-        msgSent.append(i.to_bytes(4, 'little'))
+        msgSent.append(os.getpid().to_bytes(4, 'little'))
         client.send(msgSent)
 
         msgRecv = client.recv()
         assert msgSent.payload == msgRecv.payload
 
     end = time.perf_counter()
-    print("TIME:", end-start)
+    print(f"[{id}]TIME:", end-start)
 
     client.shutdown()
 
 
 if __name__ == "__main__":
-    clientProcs: list[Process] = []
-    for _ in range(10):
-        proc = Process(target=client)
-        proc.start()
-        clientProcs.append(proc)
+    i = 0
 
-    for proc in clientProcs:
-        proc.join()
+    for _ in range(1000):
+        clientProcs: list[Process] = []
+        for _ in range(10):
+            proc = Process(target=client, args=(i,))
+            proc.start()
+            clientProcs.append(proc)
+
+            i+=1
+
+        for proc in clientProcs:
+            proc.join()
+        print("")

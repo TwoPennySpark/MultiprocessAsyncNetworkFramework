@@ -1,5 +1,9 @@
-import typing
+from __future__ import annotations
+from typing import TYPE_CHECKING, ClassVar
 from dataclasses import dataclass, field
+
+if TYPE_CHECKING:
+    from netframe.connection import Connection
 
 
 @dataclass
@@ -8,7 +12,7 @@ class Message:
     class Header:
         id: int = 0
         size: int = 0
-        HEADER_LEN: typing.ClassVar[int] = 4
+        HEADER_LEN: ClassVar[int] = 4
 
         def pack(self) -> bytes:
             return self.id.  to_bytes(2, 'little') + \
@@ -51,6 +55,5 @@ class Message:
 
 @dataclass
 class OwnedMessage:
-    workerId: int = 0
-    connId: int = 0
+    owner: Connection | None = None
     msg: Message = field(default_factory=Message)

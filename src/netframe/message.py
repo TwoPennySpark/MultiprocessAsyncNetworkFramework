@@ -55,5 +55,5 @@ class Message:
 
 @dataclass
 class OwnedMessage:
-    owner: Connection | None = None
+    owner: Connection
     msg: Message = field(default_factory=Message)

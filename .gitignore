@@ -4,7 +4,4 @@ __pycache__
 .vscode
 dist
 *.egg-info
-main.py
-protocol.py
-subprocess.py
 tests/*

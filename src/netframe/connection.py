@@ -1,8 +1,8 @@
 from __future__ import annotations
 from typing import Protocol, Coroutine
+from contextlib import suppress
 
 import asyncio
-from contextlib import suppress
 
 from netframe.message import Message, OwnedMessage
 
@@ -25,6 +25,7 @@ class Connection:
         self._owner = owner
         
         self._tasks: set[asyncio.Task] = set()
+        self._isActive = True
 
 
     async def _recv(self):
@@ -37,10 +38,11 @@ class Connection:
             msg.msg.payload = await self._reader.readexactly(msg.msg.hdr.size)            
         except asyncio.CancelledError:
             return
-        except (asyncio.IncompleteReadError, ConnectionResetError) as e:
-            self.shutdown()
+        except (asyncio.IncompleteReadError, ConnectionResetError, ConnectionAbortedError):
+            await self._shutdown()
+            self._owner.process_disconnect(self)
             return
-        
+
         self.recv()
         self._owner.process_msg(msg)
 
@@ -51,43 +53,44 @@ class Connection:
             await self._writer.drain()
         except asyncio.CancelledError:
             return
-        except ConnectionResetError as e:
-            self.shutdown()
-
-    
-    async def _shutdown(self, notifyOwner:bool=True):
-        if notifyOwner:
+        except (ConnectionResetError, ConnectionAbortedError):
+            await self._shutdown()
             self._owner.process_disconnect(self)
 
-        tasks = [t for t in self._tasks if t is not asyncio.current_task()]
-        for task in tasks:
-            task.cancel()
+    
+    async def _shutdown(self):
+        self._isActive = False
 
+        tasks = [t for t in self._tasks if t is not asyncio.current_task()]
         if len(tasks):
+            for task in tasks:
+                task.cancel()
             await asyncio.wait(tasks, timeout=1)
 
         self._writer.close()
-        with suppress(ConnectionResetError):
+        with suppress(ConnectionResetError, ConnectionAbortedError):
             await self._writer.wait_closed()
 
     
-    def _schedule(self, coro: Coroutine) -> asyncio.Task:
+    def _schedule(self, coro: Coroutine):
+        if not self._isActive:
+            return
+
         task = asyncio.create_task(coro)
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
-        return task
 
 
-    def send(self, msg: Message) -> asyncio.Task:
-        return self._schedule(self._send(msg))
+    def send(self, msg: Message):
+        self._schedule(self._send(msg))
 
 
-    def recv(self) -> asyncio.Task:
-        return self._schedule(self._recv())
+    def recv(self):
+        self._schedule(self._recv())
 
 
-    def shutdown(self, notifyOwner=True) -> asyncio.Task:
-        return self._schedule(self._shutdown(notifyOwner))
+    def shutdown(self):
+        self._schedule(self._shutdown())
 
 
     def addr(self) -> tuple[str, int]:

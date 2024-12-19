@@ -1,11 +1,10 @@
 from __future__ import annotations
+from multiprocessing.synchronize import Event as EventClass
 
 import os
 import sys
 import socket
 import asyncio
-
-from multiprocessing.synchronize import Event
 
 from netframe.config import Config
 from netframe.connection import Connection, ConnOwner
@@ -15,12 +14,10 @@ from netframe.message import OwnedMessage
 class ServerWorker:
     def run(self, listenSock: socket.socket, 
                   config: Config,
-                  shouldStop: Event):
-        
-        self._shouldStop = shouldStop
-        self._listenSock = listenSock
-
+                  shouldStop: EventClass):
         self._config = config
+        self._listenSock = listenSock
+        self._shouldStop = shouldStop
 
         self._connections = set[Connection]()  
 
@@ -51,7 +48,7 @@ class ServerWorker:
             self._connections.add(newConn)
             newConn.recv()
         else:
-            newConn.shutdown(notifyOwner=False)
+            newConn.shutdown()
 
 
     def process_msg(self, msg: OwnedMessage):

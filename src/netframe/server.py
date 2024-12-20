@@ -1,6 +1,7 @@
 import socket
 
 from multiprocessing import Process, Event
+from multiprocessing.synchronize import Event as EventClass
 from multiprocessing.context import SpawnProcess
 
 from netframe.config import Config
@@ -10,7 +11,7 @@ from netframe.server_worker import ServerWorker
 class Server:
     def __init__(self, config: Config) -> None:
         self.config = config
-        self._stopEvent = Event()
+        self._stopEvent: EventClass = Event()
         self._workers: list[SpawnProcess] = []
 
 

@@ -1,9 +1,8 @@
 from __future__ import annotations
-
-import socket
-
 from typing import Callable, Any, TYPE_CHECKING
 from multiprocessing import cpu_count
+
+import socket
 
 from netframe.message import OwnedMessage
 

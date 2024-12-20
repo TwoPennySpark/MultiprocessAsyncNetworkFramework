@@ -1,9 +1,9 @@
-from netframe import Server, Connection, OwnedMessage, Config, ContextT
+from netframe import Server, Connection, OwnedMessage, Config, Message, ContextT
 
 import os
 import time
 
-config = Config(workerNum=4)
+config = Config(workerNum=2)
 
 @config.on_client_connect
 def on_client_connect(client: Connection, context: ContextT) -> bool:
@@ -18,7 +18,7 @@ def on_client_disconnect(client: Connection, context: ContextT):
 
 @config.on_message
 def on_message(msg: OwnedMessage, context: ContextT):
-    print(f"[{os.getpid()}][msg.owner._id]ON_MSG:", msg.msg)
+    print(f"[{os.getpid()}]ON_MSG:", msg.msg)
     msg.owner.send(msg.msg)
 
 

@@ -12,15 +12,18 @@ class Message:
     class Header:
         id: int = 0
         size: int = 0
-        HEADER_LEN: ClassVar[int] = 4
+        
+        ID_FIELD_LEN: ClassVar[int] = 2
+        SIZE_FIELD_LEN: ClassVar[int] = 2
+        HEADER_LEN: ClassVar[int] = ID_FIELD_LEN + SIZE_FIELD_LEN
 
         def pack(self) -> bytes:
-            return self.id.  to_bytes(2, 'little') + \
-                   self.size.to_bytes(2, 'little')
+            return self.id.  to_bytes(self.ID_FIELD_LEN,   'little') + \
+                   self.size.to_bytes(self.SIZE_FIELD_LEN, 'little')
         
-        def unpack(self, bytes_):
-            self.id   = int.from_bytes(bytes_[:2], 'little')
-            self.size = int.from_bytes(bytes_[2:Message.Header.HEADER_LEN], 'little')
+        def unpack(self, bytes_: bytes):
+            self.id   = int.from_bytes(bytes_[:self.ID_FIELD_LEN], 'little')
+            self.size = int.from_bytes(bytes_[ self.ID_FIELD_LEN : Message.Header.HEADER_LEN], 'little')
 
 
     hdr: Header = field(default_factory=Header)
@@ -34,7 +37,7 @@ class Message:
         self.hdr.size += len(data)
 
 
-    def pop(self, length) -> bytes:
+    def pop(self, length: int) -> bytes:
         if self._start + length > self.hdr.size:
             raise IndexError
 
@@ -48,7 +51,7 @@ class Message:
         return self.hdr.pack() + self.payload
 
 
-    def unpack(self, bytes_):
+    def unpack(self, bytes_: bytes):
         self.hdr.unpack(bytes_)
         self.payload = bytes_[Message.Header.HEADER_LEN:]
 

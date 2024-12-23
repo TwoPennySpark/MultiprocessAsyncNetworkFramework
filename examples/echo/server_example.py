@@ -1,13 +1,13 @@
-from netframe import Server, Connection, OwnedMessage, Config, Message, ContextT
+from netframe import Server, Connection, OwnedMessage, Config, ContextT
 
 import os
 import time
 
-config = Config(workerNum=2)
+config = Config(workerNum=4)
 
 @config.on_client_connect
 def on_client_connect(client: Connection, context: ContextT) -> bool:
-    print(f"[{os.getpid()}]Client connected from {client.addr()}", flush=True)
+    print(f"\n[{os.getpid()}]Client connected from {client.addr()}", flush=True)
     return True
 
 

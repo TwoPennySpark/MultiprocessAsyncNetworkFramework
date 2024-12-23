@@ -31,19 +31,22 @@ class Client:
         self._proc.start()
 
 
-    def send(self, msg: Message):
-        self._outQueue.put(msg)
+    def send(self, msg: Message, block: bool=True, timeout: int | None=None):
+        self._outQueue.put(msg, block, timeout)
         
 
-    def recv(self) -> Message:
-        msg = self._inQueue.get()
+    def recv(self, block: bool=True, timeout: int | None=None) -> Message:
+        msg = self._inQueue.get(block, timeout)
         if msg is None:
-            self._outQueue.close()
-            raise ConnectionResetError("Connection closed")
+            raise ValueError("No more incoming msgs")
         
         return msg
 
 
     def shutdown(self):
-        self._stopEvent.set()
+        if not self._stopEvent.is_set():
+            self._stopEvent.set()
+            self._inQueue.close()
+            self._outQueue.close()
+            
         self._proc.join()

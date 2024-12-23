@@ -1,15 +1,14 @@
-import os
 import sys
 import socket
 import asyncio
 import functools
 
-from threading import Thread
 from multiprocessing import Queue
 from multiprocessing.synchronize import Event as EventClass
 
 from netframe.message import OwnedMessage
 from netframe.connection import Connection, ConnOwner
+from netframe.util import loop_policy_setup, win_socket_share
 
 
 class ClientWorker:
@@ -19,21 +18,15 @@ class ClientWorker:
              outQueue: Queue,
              shouldStop: EventClass):
         self._serverSock = serverSock
+        if sys.platform == "win32":
+            self._serverSock = win_socket_share(self._serverSock)
+
         self._inQueue  = inQueue
         self._outQueue = outQueue
-
         self._shouldStop = shouldStop
-        self._outQueueConsumerThread = Thread(target=self._schedule_out_msg, daemon=True)
-
-        if sys.platform == "win32":
-            sockData = self._serverSock.share(os.getpid())
-            self._serverSock = socket.fromshare(sockData)
         
-        self._loop = asyncio.get_event_loop()
-        self._loop.create_task(self._start_client())
-        self._loop.run_until_complete(self._waiter())
-
-        self._outQueueConsumerThread.join()
+        loop_policy_setup(isMultiprocess=False)
+        asyncio.run(self._start_client())
 
 
     async def _start_client(self):
@@ -41,17 +34,19 @@ class ClientWorker:
         self._connection = Connection(reader, writer, self)
         self._connection.recv()
         
-        self._outQueueConsumerThread.start()
+        self._loop = asyncio.get_event_loop()
+        self._outQueueConsumerThread = self._loop.run_in_executor(None, self._schedule_out_msgs)
 
-
-    async def _waiter(self):
         while not self._shouldStop.is_set():
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.1)
 
-        self._connection.shutdown()
         self._outQueue.put(None)
-        tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
-        await asyncio.wait(tasks)
+        await self._outQueueConsumerThread
+        
+        if self._connection.isActive:
+            self._connection.shutdown()
+            tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
+            await asyncio.wait(tasks)
 
 
     def process_msg(self, msg: OwnedMessage):
@@ -60,12 +55,11 @@ class ClientWorker:
 
     def process_disconnect(self, conn: Connection):
         self._inQueue.put(None)
-        self._outQueue.put(None)
 
         self._shouldStop.set()
 
 
-    def _schedule_out_msg(self):
+    def _schedule_out_msgs(self):
         while True:
             msg = self._outQueue.get()
             if msg == None:

@@ -14,7 +14,7 @@ class Message:
         size: int = 0
         
         ID_FIELD_LEN: ClassVar[int] = 2
-        SIZE_FIELD_LEN: ClassVar[int] = 2
+        SIZE_FIELD_LEN: ClassVar[int] = 4
         HEADER_LEN: ClassVar[int] = ID_FIELD_LEN + SIZE_FIELD_LEN
 
         def pack(self) -> bytes:

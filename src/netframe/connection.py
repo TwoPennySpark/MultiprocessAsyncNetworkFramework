@@ -24,8 +24,9 @@ class Connection:
         self._writer = writer
         self._owner = owner
         
+        self.isActive = True
+
         self._tasks: set[asyncio.Task] = set()
-        self._isActive = True
 
 
     async def _recv(self):
@@ -39,7 +40,7 @@ class Connection:
         except asyncio.CancelledError:
             return
         except (asyncio.IncompleteReadError, ConnectionResetError, ConnectionAbortedError):
-            await self._shutdown()
+            self.shutdown(waitForSendTasks=False)
             self._owner.process_disconnect(self)
             return
 
@@ -53,19 +54,15 @@ class Connection:
             await self._writer.drain()
         except asyncio.CancelledError:
             return
-        except (ConnectionResetError, ConnectionAbortedError):
-            await self._shutdown()
+        except (ConnectionResetError, ConnectionAbortedError) as e:
+            self.shutdown(waitForSendTasks=False)
             self._owner.process_disconnect(self)
 
     
     async def _shutdown(self):
-        self._isActive = False
-
-        tasks = [t for t in self._tasks if t is not asyncio.current_task()]
-        if len(tasks):
-            for task in tasks:
-                task.cancel()
-            await asyncio.wait(tasks, timeout=1)
+        allTasks = [t for t in self._tasks if t is not asyncio.current_task()]
+        if len(allTasks):
+            await asyncio.wait(allTasks)
 
         self._writer.close()
         with suppress(ConnectionResetError, ConnectionAbortedError):
@@ -73,10 +70,10 @@ class Connection:
 
     
     def _schedule(self, coro: Coroutine):
-        if not self._isActive:
+        if not self.isActive:
             return
 
-        task = asyncio.create_task(coro)
+        task = asyncio.create_task(coro, name=coro.__name__)
         self._tasks.add(task)
         task.add_done_callback(self._tasks.discard)
 
@@ -89,8 +86,17 @@ class Connection:
         self._schedule(self._recv())
 
 
-    def shutdown(self):
+    def shutdown(self, waitForSendTasks: bool=True):
+        tasksToCancell = [t for t in self._tasks 
+                        if  t is not asyncio.current_task()]
+        if waitForSendTasks:
+            tasksToCancell = [t for t in tasksToCancell 
+                            if t.get_name() != self._send.__name__]
+        for task in tasksToCancell:
+            task.cancel()
+
         self._schedule(self._shutdown())
+        self.isActive = False
 
 
     def addr(self) -> tuple[str, int]:

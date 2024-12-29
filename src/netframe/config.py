@@ -1,6 +1,5 @@
 from __future__ import annotations
 from typing import Callable, Any, TYPE_CHECKING
-from multiprocessing import cpu_count
 
 import socket
 
@@ -12,34 +11,22 @@ if TYPE_CHECKING:
 ContextT = dict[str, Any]
 
 class Config:
-    def __init__(self, addr: str = socket.gethostbyname(socket.gethostname()),
+    def __init__(self, on_client_connect:    Callable[[Connection,   ContextT], bool],
+                       on_client_disconnect: Callable[[Connection,   ContextT], None],
+                       on_message:           Callable[[OwnedMessage, ContextT], None],
+                       ip: str = socket.gethostbyname(socket.gethostname()),
                        port: int = 54314,
-                       workerNum: int = cpu_count()-1,
+                       workerNum: int = 1,
                        gracefulShutdownTimeout: float = 5) -> None:
         self.context: ContextT = ContextT()
 
-        self.addr = addr
+        self.ip = ip
         self.port = port
         
-        self.workerNum: int = workerNum
+        self.workerNum = workerNum
 
-        self.gracefulShutdownTimeout: float = gracefulShutdownTimeout
+        self.gracefulShutdownTimeout = gracefulShutdownTimeout
 
-        self._on_client_connect: Callable[[Connection, ContextT], bool] = lambda _, __: True
-        self._on_client_disconnect: Callable[[Connection, ContextT], None] = lambda _, __: None
-        self._on_message: Callable[[OwnedMessage, ContextT], None] = lambda _, __: None
-
-
-    def on_client_connect(self, handler: Callable[[Connection, ContextT], bool]) -> Callable[[Connection, ContextT], bool]:
-        self._on_client_connect = handler
-        return handler
-
-
-    def on_client_disconnect(self, handler: Callable[[Connection, ContextT], None]) -> Callable[[Connection, ContextT], None]:
-        self._on_client_disconnect = handler
-        return handler
-
-
-    def on_message(self, handler: Callable[[OwnedMessage, ContextT], None]) -> Callable[[OwnedMessage, ContextT], None]:
-        self._on_message = handler
-        return handler
+        self.on_client_connect = on_client_connect
+        self.on_client_disconnect = on_client_disconnect
+        self.on_message = on_message

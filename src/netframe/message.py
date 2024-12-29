@@ -27,7 +27,7 @@ class Message:
 
 
     hdr: Header = field(default_factory=Header)
-    payload: bytes = b''
+    payload: bytearray = field(default_factory=bytearray)
 
     _start: int = 0
 
@@ -39,7 +39,7 @@ class Message:
 
     def pop(self, length: int) -> bytes:
         if self._start + length > self.hdr.size:
-            raise IndexError
+            raise IndexError("Request to pop an amount of data that exceeds the size of the payload")
 
         data = self.payload[self._start:self._start+length]
         self._start += length
@@ -48,12 +48,12 @@ class Message:
 
 
     def pack(self) -> bytes:
-        return self.hdr.pack() + self.payload
+        return self.hdr.pack() + self.payload[:self.hdr.size]
 
 
     def unpack(self, bytes_: bytes):
         self.hdr.unpack(bytes_)
-        self.payload = bytes_[Message.Header.HEADER_LEN:]
+        self.payload = bytearray(bytes_[Message.Header.HEADER_LEN : Message.Header.HEADER_LEN + self.hdr.size])
 
 
 @dataclass

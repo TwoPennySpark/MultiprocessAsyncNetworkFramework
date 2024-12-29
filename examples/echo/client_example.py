@@ -16,6 +16,7 @@ def client(id):
     start = time.perf_counter()
     for _ in range(1):
         msgSent = Message()
+        msgSent.hdr.id = id
         msgSent.append(b"hello")
         msgSent.append(os.getpid().to_bytes(4, 'little'))
         client.send(msgSent)
@@ -33,7 +34,7 @@ if __name__ == "__main__":
     i = 0
     for _ in range(1):
         clientProcs: list[Process] = []
-        for _ in range(1):
+        for _ in range(10):
             proc = Process(target=client, args=(i,))
             proc.start()
             clientProcs.append(proc)

@@ -36,7 +36,7 @@ class Connection:
             hdrBytes = await self._reader.readexactly(Message.Header.HEADER_LEN)
             msg.msg.hdr.unpack(hdrBytes)
 
-            msg.msg.payload = await self._reader.readexactly(msg.msg.hdr.size)            
+            msg.msg.payload = bytearray(await self._reader.readexactly(msg.msg.hdr.size))            
         except asyncio.CancelledError:
             return
         except (asyncio.IncompleteReadError, ConnectionResetError, ConnectionAbortedError):

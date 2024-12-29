@@ -1,28 +1,25 @@
-from netframe import Server, Connection, OwnedMessage, Config, ContextT
+from netframe import Server, Connection, OwnedMessage, Config, Message, ContextT
 
 import os
 import time
 
-config = Config(workerNum=4)
 
-@config.on_client_connect
 def on_client_connect(client: Connection, context: ContextT) -> bool:
     print(f"\n[{os.getpid()}]Client connected from {client.addr()}", flush=True)
     return True
 
 
-@config.on_client_disconnect
 def on_client_disconnect(client: Connection, context: ContextT):
     print(f"[{os.getpid()}]Client from {client.addr()} disconnected", flush=True)
 
 
-@config.on_message
 def on_message(msg: OwnedMessage, context: ContextT):
     print(f"[{os.getpid()}]ON_MSG:", msg.msg)
     msg.owner.send(msg.msg)
 
 
 if __name__ == "__main__":
+    config = Config(on_client_connect, on_client_disconnect, on_message, workerNum=4)
     server = Server(config)
     server.start()
 

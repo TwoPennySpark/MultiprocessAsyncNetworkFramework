@@ -1,30 +1,34 @@
 import socket
+import logging
 
 from multiprocessing import Process, Event
 from multiprocessing.synchronize import Event as EventClass
 from multiprocessing.context import SpawnProcess
 
 from netframe.config import Config
+from netframe.util import setup_logging
 from netframe.server_worker import ServerWorker
+
+setup_logging()
+logger = logging.getLogger("netframe.error")
 
 
 class Server:
     def __init__(self, config: Config) -> None:
         self.config = config
         self._stopEvent: EventClass = Event()
-        self._workers: list[SpawnProcess] = []
+        self._workers: list[Process] = []
 
 
     def start(self):
         try:
-            print(f"{self.config.addr}:{self.config.port}")
-
+            logger.info(f"Starting server on {self.config.ip}:{self.config.port}")
             self._listenSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self._listenSock.bind((self.config.addr, self.config.port))
+            self._listenSock.bind((self.config.ip, self.config.port))
             self._listenSock.set_inheritable(True)
             self._listenSock.listen()
         except Exception as e:
-            print("[-]Failed to create listen socket:", e)
+            logger.error(f"Failed to create listen socket: {e}")
             raise
 
         for _ in range(self.config.workerNum):

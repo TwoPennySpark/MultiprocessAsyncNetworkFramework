@@ -1,10 +1,15 @@
 import socket
+import logging
+
 from multiprocessing import Process, Queue, Event
 from multiprocessing.synchronize import Event as EventClass
 
-
 from netframe.message import Message
+from netframe.util import setup_logging
 from netframe.client_worker import ClientWorker
+
+setup_logging()
+logger = logging.getLogger("netframe.error")
 
 
 class Client:
@@ -22,7 +27,7 @@ class Client:
         try:
             self._serverSock.connect((ip, port))
         except Exception as e:
-            print("[-]connect failed", e)
+            logger.error(f"connect failed: {e}")
             raise
 
         worker = ClientWorker()
@@ -38,6 +43,7 @@ class Client:
     def recv(self, block: bool=True, timeout: int | None=None) -> Message:
         msg = self._inQueue.get(block, timeout)
         if msg is None:
+            self._inQueue.close()
             raise ValueError("No more incoming msgs")
         
         return msg

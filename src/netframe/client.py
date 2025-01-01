@@ -27,11 +27,10 @@ class Client:
         try:
             self._serverSock.connect((ip, port))
         except Exception as e:
-            logger.error(f"connect failed: {e}")
+            logger.error(f"Connect failed: {e}")
             raise
 
-        worker = ClientWorker()
-        self._proc = Process(target=worker.run, daemon=True,
+        self._proc = Process(target=ClientWorker.run, daemon=True,
                              args=(self._serverSock, self._inQueue, self._outQueue, self._stopEvent))
         self._proc.start()
 

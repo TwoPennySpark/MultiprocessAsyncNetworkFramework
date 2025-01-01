@@ -32,8 +32,7 @@ class Server:
             raise
 
         for _ in range(self.config.workerNum):
-            worker = ServerWorker()
-            proc = Process(target=worker.run, daemon=True,
+            proc = Process(target=ServerWorker.run, daemon=True,
                            args=(self._listenSock, self.config, self._stopEvent))
             proc.start()
             self._workers.append(proc)

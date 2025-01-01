@@ -19,7 +19,7 @@ def on_message(msg: OwnedMessage, context: ContextT):
 
 
 if __name__ == "__main__":
-    config = Config(on_client_connect, on_client_disconnect, on_message, workerNum=4)
+    config = Config(on_client_connect, on_client_disconnect, on_message, workerNum=1)
     server = Server(config)
     server.start()
 

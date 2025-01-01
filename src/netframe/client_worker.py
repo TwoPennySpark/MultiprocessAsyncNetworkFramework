@@ -14,11 +14,19 @@ from netframe.util import loop_policy_setup, win_socket_share, setup_logging
 
 
 class ClientWorker:
-    def run(self,
-             serverSock: socket.socket,
-             inQueue:  Queue,
-             outQueue: Queue,
-             shouldStop: EventClass):
+    @staticmethod
+    def run(serverSock: socket.socket,
+            inQueue:  Queue,
+            outQueue: Queue,
+            shouldStop: EventClass):
+        worker = ClientWorker(serverSock, inQueue, outQueue, shouldStop)
+        worker.start_client()
+
+
+    def __init__(self, serverSock: socket.socket,
+                       inQueue:  Queue,
+                       outQueue: Queue,
+                       shouldStop: EventClass):
         self._serverSock = serverSock
         if sys.platform == "win32":
             self._serverSock = win_socket_share(self._serverSock)
@@ -30,6 +38,8 @@ class ClientWorker:
         setup_logging()
         self._logger = logging.getLogger("netframe.error")
         
+
+    def start_client(self):
         loop_policy_setup(isMultiprocess=False)
         asyncio.run(self._start_client())
 

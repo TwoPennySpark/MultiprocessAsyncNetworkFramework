@@ -14,9 +14,17 @@ from netframe.util import loop_policy_setup, win_socket_share, setup_logging
 
 
 class ServerWorker:
-    def run(self, listenSock: socket.socket, 
-                  config: Config,
-                  shouldStop: EventClass):
+    @staticmethod
+    def run(listenSock: socket.socket, 
+            config: Config,
+            shouldStop: EventClass):
+        worker = ServerWorker(listenSock, config, shouldStop)
+        worker.serve()
+
+
+    def __init__(self, listenSock: socket.socket, 
+                       config: Config,
+                       shouldStop: EventClass):
         self._listenSock = listenSock
         if sys.platform == "win32":
             self._listenSock = win_socket_share(self._listenSock)
@@ -29,6 +37,8 @@ class ServerWorker:
         setup_logging()
         self._logger = logging.getLogger("netframe.error")
 
+
+    def serve(self):
         loop_policy_setup(self._config.workerNum > 1)
         asyncio.run(self._serve())
 

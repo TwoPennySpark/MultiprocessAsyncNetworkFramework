@@ -17,7 +17,7 @@ def loop_policy_setup(isMultiprocess: bool):
     if sys.platform == "win32":
         if isMultiprocess:
             asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-    else:
+    else: # pragma: no cover
         try:
             import uvloop
             asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())

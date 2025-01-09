@@ -87,12 +87,12 @@ class Connection:
 
 
     def shutdown(self, waitForSendTasks: bool=True):
-        tasksToCancell = [t for t in self._tasks 
+        tasksToCancel = [t for t in self._tasks 
                         if  t is not asyncio.current_task()]
         if waitForSendTasks:
-            tasksToCancell = [t for t in tasksToCancell 
+            tasksToCancel = [t for t in tasksToCancel
                             if t.get_name() != self._send.__name__]
-        for task in tasksToCancell:
+        for task in tasksToCancel:
             task.cancel()
 
         self._schedule(self._shutdown())

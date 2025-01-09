@@ -42,7 +42,7 @@ def test_instant_reject(server: Server, client: Client):
     client.send(msg)
     client.send(msg)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError):
         client.recv()
 
 
@@ -56,7 +56,7 @@ def test_send_then_reject(server: Server, client: Client):
     client.recv()
     client.recv()
     client.recv()
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError):
         client.recv()
 
         
@@ -73,5 +73,5 @@ def test_recv_send_then_disconnect(server: Server, client: Client):
     client.recv()
     client.recv()
     client.recv()
-    with pytest.raises(ValueError):
+    with pytest.raises(RuntimeError):
         client.recv()

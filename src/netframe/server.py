@@ -15,27 +15,29 @@ logger = logging.getLogger("netframe.error")
 
 class Server:
     def __init__(self, config: Config) -> None:
-        self.config = config
+        self._config = config
         self._stopEvent: EventClass = Event()
         self._workers: list[Process] = []
 
 
     def start(self):
         try:
-            logger.info(f"Starting server on {self.config.ip}:{self.config.port}")
-            self._listenSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            self._listenSock.bind((self.config.ip, self.config.port))
-            self._listenSock.set_inheritable(True)
-            self._listenSock.listen()
+            logger.info(f"Starting server on {self._config.ip}:{self._config.port}")
+            listenSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            listenSock.bind((self._config.ip, self._config.port))
+            listenSock.set_inheritable(True)
+            listenSock.listen()
         except Exception as e:
             logger.error(f"Failed to create listen socket: {e}")
             raise
 
-        for _ in range(self.config.workerNum):
+        for _ in range(self._config.workerNum):
             proc = Process(target=ServerWorker.run, daemon=True,
-                           args=(self._listenSock, self.config, self._stopEvent))
+                           args=(listenSock, self._config, self._stopEvent))
             proc.start()
             self._workers.append(proc)
+
+        listenSock.close()
 
 
     def stop(self):

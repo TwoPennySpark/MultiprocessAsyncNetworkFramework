@@ -1,7 +1,6 @@
 import os
 import time
 import socket
-import subprocess
 
 from multiprocessing import Process
 
@@ -15,9 +14,9 @@ def client(id):
     client.connect(ip=addr, port=54314)
 
     start = time.perf_counter()
-    for _ in range(1):
+    for i in range(1024):
         msgSent = Message()
-        msgSent.hdr.id = id
+        msgSent.hdr.id = i
         msgSent.append(b"hello")
         msgSent.append(os.getpid().to_bytes(4, 'little'))
         client.send(msgSent)

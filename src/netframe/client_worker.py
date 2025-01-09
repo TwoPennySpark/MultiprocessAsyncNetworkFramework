@@ -49,22 +49,18 @@ class ClientWorker:
         self._connection = Connection(reader, writer, self)
         self._connection.recv()
         
-        self._loop = asyncio.get_event_loop()
-        self._outQueueConsumerThread = self._loop.run_in_executor(None, self._schedule_out_msgs)
-
         self._logger.info(f"Started client process({os.getpid()})")
-
-        while not self._shouldStop.is_set():
-            await asyncio.sleep(0.1)
-
-        self._outQueue.put(None)
-        await self._outQueueConsumerThread
         
+        self._loop = asyncio.get_event_loop()
+        await self._loop.run_in_executor(None, self._schedule_out_msgs)
+
         if self._connection.isActive:
             self._connection.shutdown()
             tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
             await asyncio.wait(tasks)
 
+        self._inQueue.cancel_join_thread()
+        
         self._logger.info(f"Finished client process({os.getpid()})")
 
 

@@ -14,6 +14,7 @@ def win_socket_share(sock: socket.socket) -> socket.socket:
     
 
 def loop_policy_setup(isMultiprocess: bool):
+    asyncio.set_event_loop(asyncio.new_event_loop())
     if sys.platform == "win32":
         if isMultiprocess:
             asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())

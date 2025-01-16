@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Callable, Any, TYPE_CHECKING
+from typing import Protocol, Any, TYPE_CHECKING
 
 import socket
 
@@ -10,15 +10,26 @@ if TYPE_CHECKING:
 
 ContextT = dict[str, Any]
 
+
+class ServerApp(Protocol):
+    def on_client_connect(self, client: Connection, context: ContextT) -> bool:
+        ...
+
+    def on_client_disconnect(self, client: Connection, context: ContextT):
+        ...
+
+    def on_message(self, msg: OwnedMessage, context: ContextT):
+        ...
+
+
 class Config:
-    def __init__(self, on_client_connect:    Callable[[Connection,   ContextT], bool],
-                       on_client_disconnect: Callable[[Connection,   ContextT], None],
-                       on_message:           Callable[[OwnedMessage, ContextT], None],
+    def __init__(self, app: ServerApp,
                        ip: str = socket.gethostbyname(socket.gethostname()),
                        port: int = 54314,
                        workerNum: int = 1,
-                       gracefulShutdownTimeout: float = 5) -> None:
+                       gracefulShutdownTimeout: float = 0) -> None:
         self.context: ContextT = ContextT()
+        self.app = app
 
         self.ip = ip
         self.port = port
@@ -26,7 +37,3 @@ class Config:
         self.workerNum = workerNum
 
         self.gracefulShutdownTimeout = gracefulShutdownTimeout
-
-        self.on_client_connect = on_client_connect
-        self.on_client_disconnect = on_client_disconnect
-        self.on_message = on_message

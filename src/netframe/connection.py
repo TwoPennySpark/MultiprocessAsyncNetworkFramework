@@ -16,6 +16,11 @@ class ConnOwner(Protocol):
 
 
 class Connection:
+    '''
+    Represents TCP connection. Provides means for sending, receiving data and
+    closing the connection.
+    '''
+
     def __init__(self,
                  reader: asyncio.StreamReader, 
                  writer: asyncio.StreamWriter, 
@@ -54,7 +59,7 @@ class Connection:
             await self._writer.drain()
         except asyncio.CancelledError:
             return
-        except (ConnectionResetError, ConnectionAbortedError) as e:
+        except (ConnectionResetError, ConnectionAbortedError):
             self.shutdown(waitForSendTasks=False)
             self._owner.process_disconnect(self)
 

@@ -1,4 +1,8 @@
 import pytest
+from unittest import mock
+
+from utils import MockReader, MockWriter, run_threaded_client
+
 from netframe import Server, Client, Message, OwnedMessage, Connection, ContextT
 
 
@@ -75,3 +79,16 @@ def test_recv_send_then_disconnect(server: Server, client: Client):
     client.recv()
     with pytest.raises(RuntimeError):
         client.recv()
+
+
+@mock.patch("netframe.client_worker.asyncio.open_connection")
+def test_client_send_completion(mock_open_connection):
+    writer = MockWriter()
+    mock_open_connection.return_value = (MockReader(), writer)
+
+    with run_threaded_client() as client:
+        msg = Message()
+        for _ in range(1024):
+            client.send(msg)
+
+    assert writer.buffer == 1024*[msg.pack()]

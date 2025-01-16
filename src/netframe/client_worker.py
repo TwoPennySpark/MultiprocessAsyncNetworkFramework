@@ -14,28 +14,41 @@ from netframe.util import loop_policy_setup, win_socket_share, setup_logging
 
 
 class ClientWorker:
+    '''
+    Represents a process running an asyncio event loop.
+    Manages TCP connection between server and client.
+    '''
+
     @staticmethod
     def run(serverSock: socket.socket,
             inQueue:  Queue,
             outQueue: Queue,
-            shouldStop: EventClass):
-        worker = ClientWorker(serverSock, inQueue, outQueue, shouldStop)
+            connLost: EventClass):
+        setup_logging()
+
+        worker = ClientWorker(serverSock, inQueue, outQueue, connLost)
         worker.start_client()
 
 
     def __init__(self, serverSock: socket.socket,
                        inQueue:  Queue,
                        outQueue: Queue,
-                       shouldStop: EventClass):
+                       connLost: EventClass):
+        '''
+        Parameters:
+            serverSock: socket that respresents already established connection between client and server
+            inQueue:  queue for incoming msgs. Filled by ClientWorker, consumed by Client
+            outQueue: queue for outgoing msgs. Filled by Client, consumed by ClientWorker
+            connLost: event that is set by ClientWorker to notify Client about the connection breakup
+        '''
         self._serverSock = serverSock
         if sys.platform == "win32":
             self._serverSock = win_socket_share(self._serverSock)
 
         self._inQueue  = inQueue
         self._outQueue = outQueue
-        self._shouldStop = shouldStop
+        self._connLost = connLost
         
-        setup_logging()
         self._logger = logging.getLogger("netframe.error")
         
 
@@ -52,6 +65,8 @@ class ClientWorker:
         self._logger.info(f"Started client process({os.getpid()})")
         
         self._loop = asyncio.get_event_loop()
+
+        # launch outQueue consumer thread, it will run until Client calls shutdown()
         await self._loop.run_in_executor(None, self._schedule_out_msgs)
 
         if self._connection.isActive:
@@ -59,19 +74,26 @@ class ClientWorker:
             tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
             await asyncio.wait(tasks)
 
+        # at this point there might be some msgs left in inQueue which
+        # will prevent us from exiting worker process. Since we get to
+        # this part after shutdown() is called, it means that the client is
+        # no longer interested in received msgs and we can safely discard
+        # them by canceling queue thread
         self._inQueue.cancel_join_thread()
         
         self._logger.info(f"Finished client process({os.getpid()})")
 
 
+    # ConnOwner protocol method
     def process_msg(self, msg: OwnedMessage):
         self._inQueue.put(msg.msg)
 
 
+    # ConnOwner protocol method
     def process_disconnect(self, conn: Connection):
         self._inQueue.put(None)
 
-        self._shouldStop.set()
+        self._connLost.set()
 
 
     def _schedule_out_msgs(self):

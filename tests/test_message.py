@@ -46,13 +46,16 @@ def test_append_pop(dataBatch):
             assert data == m.pop(dataLen)
                 
     assert m._start == m.hdr.size
+    with pytest.raises(IndexError):
+        m.pop(1)
 
 
 @pytest.mark.parametrize(
     ("msg", "packed"),
     (
-        (Message(hdr=Message.Header(id=0, size=0), payload=bytearray()),       b'\x00\x00\x00\x00\x00\x00'),
-        (Message(hdr=Message.Header(id=1, size=3), payload=bytearray(b'123')), b'\x01\x00\x03\x00\x00\x00123')
+        (Message(hdr=Message.Header(id=0, size=0), payload=bytearray()),         b'\x00\x00\x00\x00\x00\x00'),
+        (Message(hdr=Message.Header(id=1, size=3), payload=bytearray(b'123')),   b'\x01\x00\x03\x00\x00\x00123'),
+        (Message(hdr=Message.Header(id=1, size=3), payload=bytearray(b'12345')), b'\x01\x00\x03\x00\x00\x00123')
     )
 )
 def test_pack_unpack(msg: Message, packed: bytes):
@@ -63,4 +66,4 @@ def test_pack_unpack(msg: Message, packed: bytes):
 
     assert copy.hdr.id == msg.hdr.id
     assert copy.hdr.size == msg.hdr.size
-    assert copy.payload == msg.payload
+    assert copy.payload == msg.payload[:msg.hdr.size]

@@ -14,10 +14,17 @@ from netframe.util import loop_policy_setup, win_socket_share, setup_logging
 
 
 class ServerWorker:
+    '''
+    Represents a process running an asyncio event loop.
+    Accepts and stores TCP connections.
+    '''
+
     @staticmethod
     def run(listenSock: socket.socket, 
             config: Config,
             shouldStop: EventClass):
+        setup_logging()
+
         worker = ServerWorker(listenSock, config, shouldStop)
         worker.serve()
 
@@ -25,16 +32,22 @@ class ServerWorker:
     def __init__(self, listenSock: socket.socket, 
                        config: Config,
                        shouldStop: EventClass):
+        '''
+        Parameters:
+            listenSock: shared listen socket that is used to accept new connections
+            config:  configuration params
+            shouldStop: event that is set by Server to signal ServerWorkers to quit
+        '''
         self._listenSock = listenSock
         if sys.platform == "win32":
             self._listenSock = win_socket_share(self._listenSock)
         
         self._config = config
+        self._app = self._config.app
         self._shouldStop = shouldStop
 
         self._connections = set[Connection]()  
 
-        setup_logging()
         self._logger = logging.getLogger("netframe.error")
 
 
@@ -62,7 +75,7 @@ class ServerWorker:
         newConn = Connection(reader, writer, self)
 
         try:
-            allowConnection = self._config.on_client_connect(newConn, self._config.context)
+            allowConnection = self._app.on_client_connect(newConn, self._config.context)
         except BaseException as e:
             self._logger.error(f"Exception occured during execution of "
                                f"user-supplied 'on_client_connect' callback: {e}")
@@ -74,18 +87,20 @@ class ServerWorker:
             newConn.shutdown()
 
 
+    # ConnOwner protocol method
     def process_msg(self, msg: OwnedMessage):
         try:
-            self._config.on_message(msg, self._config.context)
+            self._app.on_message(msg, self._config.context)
         except BaseException as e:
             self._logger.error(f"Exception occured during execution of "
                                f"user-supplied 'on_message' callback: {e}")
 
 
+    # ConnOwner protocol method
     def process_disconnect(self, conn: Connection):
         self._connections.discard(conn)
         try:
-            self._config.on_client_disconnect(conn, self._config.context)
+            self._app.on_client_disconnect(conn, self._config.context)
         except BaseException as e:
             self._logger.error(f"Exception occured during execution of "
                                f"user-supplied 'on_client_disconnect' callback: {e}")

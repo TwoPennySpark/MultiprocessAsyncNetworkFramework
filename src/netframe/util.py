@@ -8,9 +8,10 @@ import logging.config
 import logging.handlers
 
 
-def win_socket_share(sock: socket.socket) -> socket.socket:
-    sockData = sock.share(os.getpid())
-    return socket.fromshare(sockData)
+if sys.platform == "win32":
+    def win_socket_share(sock: socket.socket) -> socket.socket:
+        sockData = sock.share(os.getpid())
+        return socket.fromshare(sockData)
     
 
 def loop_policy_setup(isMultiprocess: bool):

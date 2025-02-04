@@ -34,7 +34,7 @@ if __name__ == "__main__":
     i = 0
     for _ in range(1):
         clientProcs: list[Process] = []
-        for _ in range(8):
+        for _ in range(1):
             proc = Process(target=client, args=(i,))
             proc.start()
             clientProcs.append(proc)

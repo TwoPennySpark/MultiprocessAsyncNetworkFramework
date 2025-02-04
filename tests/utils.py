@@ -10,7 +10,7 @@ class MockReader:
     def __init__(self, *data: bytes | BaseException):
         self.inData = list(data)
         self.index = 0
-        self.allRead, self.allReadAsync = multiprocessing.Event(), asyncio.Event()
+        self.allRead = asyncio.Event()
         self.blockForever = asyncio.Event()
 
 
@@ -42,7 +42,6 @@ class MockReader:
     def _check_all_read(self):
         if self.index == len(self.inData):
             self.allRead.set()
-            self.allReadAsync.set()
 
 
 class MockWriter:

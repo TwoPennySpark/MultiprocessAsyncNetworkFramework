@@ -10,7 +10,9 @@ import logging
 from netframe.config import Config
 from netframe.message import OwnedMessage
 from netframe.connection import Connection, ConnOwner
-from netframe.util import loop_policy_setup, win_socket_share, setup_logging
+from netframe.util import loop_policy_setup, setup_logging
+if sys.platform == "win32":
+    from netframe.util import win_socket_share
 
 
 class ServerWorker:
@@ -24,6 +26,9 @@ class ServerWorker:
             config: Config,
             shouldStop: EventClass):
         setup_logging()
+
+        if sys.platform == "win32":
+            listenSock = win_socket_share(listenSock)
 
         worker = ServerWorker(listenSock, config, shouldStop)
         worker.serve()
@@ -39,9 +44,6 @@ class ServerWorker:
             shouldStop: event that is set by Server to signal ServerWorkers to quit
         '''
         self._listenSock = listenSock
-        if sys.platform == "win32":
-            self._listenSock = win_socket_share(self._listenSock)
-        
         self._config = config
         self._app = self._config.app
         self._shouldStop = shouldStop

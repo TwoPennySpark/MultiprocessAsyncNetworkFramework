@@ -10,7 +10,9 @@ from multiprocessing.synchronize import Event as EventClass
 
 from netframe.message import OwnedMessage
 from netframe.connection import Connection, ConnOwner
-from netframe.util import loop_policy_setup, win_socket_share, setup_logging
+from netframe.util import loop_policy_setup, setup_logging
+if sys.platform == "win32":
+    from netframe.util import win_socket_share
 
 
 class ClientWorker:
@@ -25,6 +27,9 @@ class ClientWorker:
             outQueue: Queue,
             connLost: EventClass):
         setup_logging()
+
+        if sys.platform == "win32":
+            serverSock = win_socket_share(serverSock)
 
         worker = ClientWorker(serverSock, inQueue, outQueue, connLost)
         worker.start_client()
@@ -42,9 +47,6 @@ class ClientWorker:
             connLost: event that is set by ClientWorker to notify Client about the connection breakup
         '''
         self._serverSock = serverSock
-        if sys.platform == "win32":
-            self._serverSock = win_socket_share(self._serverSock)
-
         self._inQueue  = inQueue
         self._outQueue = outQueue
         self._connLost = connLost

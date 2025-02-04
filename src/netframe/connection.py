@@ -1,7 +1,10 @@
 from __future__ import annotations
+import asyncio.trsock
 from typing import Protocol, Coroutine
 from contextlib import suppress
+from enum import Enum, auto
 
+import socket
 import asyncio
 
 from netframe.message import Message, OwnedMessage
@@ -45,8 +48,7 @@ class Connection:
         except asyncio.CancelledError:
             return
         except (asyncio.IncompleteReadError, ConnectionResetError, ConnectionAbortedError):
-            self.shutdown(waitForSendTasks=False)
-            self._owner.process_disconnect(self)
+            self.shutdown(self.SHUTDOWN_REASON.CONNECTION_BREAKUP)
             return
 
         self.recv()
@@ -60,18 +62,41 @@ class Connection:
         except asyncio.CancelledError:
             return
         except (ConnectionResetError, ConnectionAbortedError):
-            self.shutdown(waitForSendTasks=False)
-            self._owner.process_disconnect(self)
+            self.shutdown(self.SHUTDOWN_REASON.CONNECTION_BREAKUP)
 
     
-    async def _shutdown(self):
+    class SHUTDOWN_REASON(Enum):
+        MANUAL = auto() 
+        CONNECTION_BREAKUP = auto()
+
+
+    async def _shutdown(self, reason: SHUTDOWN_REASON):
         allTasks = [t for t in self._tasks if t is not asyncio.current_task()]
         if len(allTasks):
             await asyncio.wait(allTasks)
+        
+        # when using TCP, if we schedule some msgs to be sent and then close the
+        # connection immediately, those scheduled msgs may not be fully delivered if 
+        # there is some pending readable data left on the socket
+        # to prevent this, we issue a shutdown and drain the recv buffer
+        # https://blog.netherlabs.nl/articles/2009/01/18/the-ultimate-so_linger-page-or-why-is-my-tcp-not-reliable  
+        if reason == self.SHUTDOWN_REASON.MANUAL:
+            sock = self._writer.get_extra_info('socket')
+            sock.shutdown(socket.SHUT_WR)
+            while True:
+                try:
+                    msg = await self._reader.read(1024)
+                    if msg == b'':
+                        break
+                except:
+                    break
 
         self._writer.close()
         with suppress(ConnectionResetError, ConnectionAbortedError):
             await self._writer.wait_closed()
+
+        if reason == self.SHUTDOWN_REASON.CONNECTION_BREAKUP:
+            self._owner.process_disconnect(self)
 
     
     def _schedule(self, coro: Coroutine):
@@ -91,16 +116,17 @@ class Connection:
         self._schedule(self._recv())
 
 
-    def shutdown(self, waitForSendTasks: bool=True):
+    def shutdown(self, reason: SHUTDOWN_REASON = SHUTDOWN_REASON.MANUAL):
         tasksToCancel = [t for t in self._tasks 
-                        if  t is not asyncio.current_task()]
-        if waitForSendTasks:
+                        if t is not asyncio.current_task()]
+        # do not cancel scheduled send tasks in case of manual shutdown
+        if reason == self.SHUTDOWN_REASON.MANUAL:
             tasksToCancel = [t for t in tasksToCancel
                             if t.get_name() != self._send.__name__]
         for task in tasksToCancel:
             task.cancel()
 
-        self._schedule(self._shutdown())
+        self._schedule(self._shutdown(reason))
         self.isActive = False
 
 

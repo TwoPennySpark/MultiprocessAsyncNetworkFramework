@@ -10,9 +10,8 @@ from netframe import Message
 from netframe.server_worker import ServerWorker
     
 
-@mock.patch("netframe.server_worker.win_socket_share")
 @pytest.mark.asyncio
-async def test_config_cb_called(mock_win_socket_share):
+async def test_config_cb_called():
     msg = Message(Message.Header(id=0, size=4), payload=bytearray(b'0'*4))
     reader = MockReader(msg.pack(), asyncio.IncompleteReadError(b'', None))
 
@@ -21,16 +20,17 @@ async def test_config_cb_called(mock_win_socket_share):
 
     worker = ServerWorker(mock.MagicMock(), config, multiprocessing.Event())
     await asyncio.create_task(worker._process_new_connection(reader, writer))
-    await reader.allReadAsync.wait()
+
+    while len(worker._connections):
+        await asyncio.sleep(0.01)
 
     config.app.on_client_connect.assert_called_once()
     config.app.on_message.assert_called_once()
     config.app.on_client_disconnect.assert_called_once()
 
 
-@mock.patch("netframe.server_worker.win_socket_share")
 @pytest.mark.asyncio
-async def test_disconnect_cb_not_called_after_conn_reject(mock_win_socket_share):
+async def test_disconnect_cb_not_called_after_conn_reject():
     msg = Message(Message.Header(id=0, size=4), payload=bytearray(b'0'*4))
     reader = MockReader(msg.pack(), asyncio.IncompleteReadError(b'', None))
 
@@ -46,9 +46,8 @@ async def test_disconnect_cb_not_called_after_conn_reject(mock_win_socket_share)
     config.app.on_client_disconnect.assert_not_called()
 
 
-@mock.patch("netframe.server_worker.win_socket_share")
 @pytest.mark.asyncio
-async def test_exception_in_on_client_connect_cb(mock_win_socket_share):
+async def test_exception_in_on_client_connect_cb():
     reader = MockReader()
     writer = MockWriter()
     config = mock.MagicMock()

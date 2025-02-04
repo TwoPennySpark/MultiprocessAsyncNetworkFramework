@@ -1,9 +1,9 @@
 import pytest
-from unittest import mock
+from multiprocessing import Queue
 
-from utils import MockReader, MockWriter, run_threaded_client
+from utils import run_server, run_client
 
-from netframe import Server, Client, Message, OwnedMessage, Connection, ContextT
+from netframe import Server, Client, Message, OwnedMessage, Connection, Config, ContextT
 
 
 def disconnect_on_client_connect(client: Connection, context: ContextT) -> bool:
@@ -81,14 +81,32 @@ def test_recv_send_then_disconnect(server: Server, client: Client):
         client.recv()
 
 
-@mock.patch("netframe.client_worker.asyncio.open_connection")
-def test_client_send_completion(mock_open_connection):
-    writer = MockWriter()
-    mock_open_connection.return_value = (MockReader(), writer)
+class App:
+    def on_client_connect(self, client: Connection, context: ContextT) -> bool:
+        return True
 
-    with run_threaded_client() as client:
-        msg = Message()
-        for _ in range(1024):
-            client.send(msg)
+    def on_client_disconnect(self, client: Connection, context: ContextT):
+        context["inQ"].put(None)
 
-    assert writer.buffer == 1024*[msg.pack()]
+    def on_message(self, msg: OwnedMessage, context: ContextT):
+        msg.owner.send(msg.msg)
+        context["inQ"].put(msg.msg)
+
+
+def test_client_send_completion():
+    serverInQ = Queue()
+    config = Config(App())
+    config.context["inQ"] = serverInQ
+
+    recvMsgNum, sendMsgNum = 0, 1024
+
+    with run_server(config):
+        with run_client() as client:
+            msg = Message()
+            for _ in range(sendMsgNum):
+                client.send(msg)
+
+        while serverInQ.get(timeout=5) != None:
+            recvMsgNum += 1
+
+    assert recvMsgNum == sendMsgNum

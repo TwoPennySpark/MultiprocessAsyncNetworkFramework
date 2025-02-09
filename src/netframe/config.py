@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import Protocol, Any, TYPE_CHECKING
+from dataclasses import dataclass, field
 
 import socket
 
@@ -10,10 +11,9 @@ if TYPE_CHECKING:
 
 ContextT = dict[str, Any]
 
-
 class ServerApp(Protocol):
     def on_client_connect(self, client: Connection, context: ContextT) -> bool:
-        ...
+        return True
 
     def on_client_disconnect(self, client: Connection, context: ContextT):
         ...
@@ -22,18 +22,13 @@ class ServerApp(Protocol):
         ...
 
 
+@dataclass
 class Config:
-    def __init__(self, app: ServerApp,
-                       ip: str = socket.gethostbyname(socket.gethostname()),
-                       port: int = 54314,
-                       workerNum: int = 1,
-                       gracefulShutdownTimeout: float = 0) -> None:
-        self.context: ContextT = ContextT()
-        self.app = app
+    app: ServerApp
+    context: ContextT = field(default_factory=ContextT)
 
-        self.ip = ip
-        self.port = port
-        
-        self.workerNum = workerNum
+    ip: str = socket.gethostbyname(socket.gethostname())
+    port: int = 54314
 
-        self.gracefulShutdownTimeout = gracefulShutdownTimeout
+    workerNum: int = 1
+    gracefulShutdownTimeout: float | None = None

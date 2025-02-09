@@ -1,31 +1,33 @@
+import queue
 import socket
 import logging
 
-from multiprocessing import Process, Queue, Event
-from multiprocessing.synchronize import Event as EventClass
+from multiprocessing import Process, Pipe
 
 from netframe.message import Message
 from netframe.util import setup_logging
 from netframe.client_worker import ClientWorker
 
-setup_logging()
-
 
 class Client:
-    def __init__(self) -> None:
-        self._inQueue: Queue[Message | None] = Queue()
-        self._outQueue: Queue[Message | None] = Queue()
-        self._workerProc: Process | None = None
+    def __init__(self):
+        self._inQueueRead,  self._inQueueWrite  = Pipe()
+        self._outQueueRead, self._outQueueWrite = Pipe()
+        self._worker: Process | None = None
 
-        # Event that is set by ClientWorker to notify Client about the 
-        # connection breakup. Used in send method to signal to the user
-        # of Client that he can no longer send any msgs
-        self._connLost: EventClass = Event()
-        
+        setup_logging()
         self._logger = logging.getLogger("netframe.error")
 
 
+    def __del__(self):
+        if self._worker:
+            self.shutdown()
+
+
     def connect(self, ip: str, port: int):
+        if self._worker:
+            raise RuntimeError("Client already connected")
+        
         # connect to server
         serverSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         serverSock.set_inheritable(True)
@@ -36,42 +38,53 @@ class Client:
             raise
 
         # launch client worker process, pass newly created socket
-        self._workerProc = Process(target=ClientWorker.run, daemon=True,
-                             args=(serverSock, self._inQueue, self._outQueue, self._connLost))
-        self._workerProc.start()
+        self._worker = Process(target=ClientWorker.run, daemon=True,
+                             args=(serverSock, self._inQueueWrite, self._outQueueRead))
+        self._worker.start()
 
-        # don't need server socket in this process any more
+        # close resources not needed in this proc
+        self._inQueueWrite.close()
+        self._outQueueRead.close()
         serverSock.close()
 
 
-    def send(self, msg: Message, block: bool=True, timeout: int | None=None):
-        if self._connLost.is_set():
-            raise RuntimeError("Connection is closed for write")
-        self._outQueue.put(msg, block, timeout)
+    def send(self, msg: Message):
+        if not self._worker:
+            raise RuntimeError("Client is not connected")
+        
+        try:
+            self._outQueueWrite.send(msg)
+        except (BrokenPipeError, OSError):
+            raise ConnectionResetError("Connection lost")
         
 
-    def recv(self, block: bool=True, timeout: int | None=None) -> Message:
-        msg = self._inQueue.get(block, timeout)
-        # msg == None means there won't be any more incoming msgs
-        # we don't check self._connLost event here, since, even if
-        # connection is lost, ClientWorker can still store msgs it 
-        # read before connection breakup that were not yet requested 
-        # by the Client
-        if msg is None:
-            self._inQueue.close()
-            raise RuntimeError("No more incoming msgs")
+    def recv(self, timeout: float | None=None) -> Message:
+        if not self._worker:
+            raise RuntimeError("Client is not connected")
+
+        try:
+            if timeout != None and self._inQueueRead.poll(timeout) == False:
+                raise queue.Empty
+            msg = self._inQueueRead.recv()
+        except (EOFError, OSError):
+            raise ConnectionResetError("Connection lost")
         
         return msg
 
 
-    def shutdown(self):
-        if not self._workerProc:
-            return
+    def shutdown(self, timeout: float | None=None):
+        ''' 
+        Stop client worker process in timeout seconds
+        If timeout is reached and worker still active -
+        force shutdown it
+        '''
+        if not self._worker:
+            raise RuntimeError("Client is not connected")
+        
+        self._inQueueRead.close()
+        self._outQueueWrite.close()
 
-        self._inQueue.close()
-
-        self._outQueue.put(None)
-        self._outQueue.close()
-
-        self._workerProc.join()
-        self._workerProc = None
+        self._worker.join(timeout)
+        if self._worker.is_alive():
+            self._worker.kill()
+        self._worker = None

@@ -1,11 +1,10 @@
-from __future__ import annotations
-from multiprocessing.synchronize import Event as EventClass
-
 import os
 import sys
 import socket
 import asyncio
 import logging
+
+from multiprocessing.synchronize import Event as EventClass
 
 from netframe.config import Config
 from netframe.message import OwnedMessage
@@ -15,7 +14,7 @@ if sys.platform == "win32":
     from netframe.util import win_socket_share
 
 
-class ServerWorker:
+class ServerWorker(ConnOwner):
     '''
     Represents a process running an asyncio event loop.
     Accepts and stores TCP connections.

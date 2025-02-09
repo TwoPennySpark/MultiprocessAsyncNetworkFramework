@@ -1,43 +1,61 @@
+import time
+import queue
 import pytest
-from unittest import mock
 
-from utils import MockReader, MockWriter, run_threaded_client, run_server, DEFAULT_CONFIG
+from utils import run_server, DEFAULT_CONFIG
 
-from netframe import Client, Message
+from netframe import Server, Client, Message, OwnedMessage, ContextT
 
 
-@mock.patch("netframe.client_worker.asyncio.open_connection")
-def test_send_after_conn_lost(mock_open_connection):
+def echo_on_message(msg: OwnedMessage, context: ContextT):
+    msg.owner.send(msg.msg)
+
+
+def echo_delayed_on_message(msg: OwnedMessage, context: ContextT):
+    time.sleep(0.5)
+    msg.owner.send(msg.msg)
+
+
+@pytest.mark.parametrize("server", (
+                        (None, None, echo_on_message),
+                        ),
+                        indirect=True)
+def test_basic_functionality(server: Server, client: Client):
     msg = Message()
-    reader = MockReader(ConnectionResetError())
-    mock_open_connection.return_value = (reader, MockWriter())
+    msg.hdr.id = 0xff
+    msg.append(b"hello")
 
-    with run_threaded_client() as client:
-        client._connLost.wait()
-        with pytest.raises(RuntimeError):
-            client.send(msg)
+    client.send(msg)
+    assert msg == client.recv()
 
 
-@mock.patch("netframe.client_worker.asyncio.open_connection")
-def test_read_after_conn_lost(mock_open_connection):
-    msg1 = Message(hdr=Message.Header(id=1, size=1), payload=bytearray(b'\x01'))
-    msg2 = Message(hdr=Message.Header(id=2, size=1), payload=bytearray(b'\x02'))
-    reader = MockReader(msg1.pack(), msg2.pack(), ConnectionResetError())
-    mock_open_connection.return_value = (reader, MockWriter())
+@pytest.mark.parametrize("server", (
+                        (None, None, echo_delayed_on_message),
+                        ),
+                        indirect=True)
+def test_recv_timeout(server: Server, client: Client):
+    client.send(Message())
+    with pytest.raises(queue.Empty):
+        client.recv(timeout=0)
 
-    with run_threaded_client() as client:
-        client._connLost.wait()
-        assert client.recv() == msg1
-        assert client.recv() == msg2
-        with pytest.raises(RuntimeError):
-            client.recv()
+    client.recv(timeout=10)
 
 
-def test_unexpected_shutdowns():
+def test_misplaced_calls():
     with run_server(DEFAULT_CONFIG):
         client = Client()
-        client.shutdown()
+        
+        with pytest.raises(RuntimeError):
+            client.recv()
+        with pytest.raises(RuntimeError):
+            client.send(Message())
+        with pytest.raises(RuntimeError):
+            client.shutdown()
 
         client.connect(DEFAULT_CONFIG.ip, DEFAULT_CONFIG.port)
+        with pytest.raises(RuntimeError):
+            client.connect(DEFAULT_CONFIG.ip, DEFAULT_CONFIG.port)
         client.shutdown()
-        client.shutdown()
+
+        with pytest.raises(RuntimeError):
+            client.shutdown()

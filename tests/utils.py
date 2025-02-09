@@ -2,7 +2,7 @@ import asyncio
 import threading
 import multiprocessing
 from unittest import mock
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 
 from netframe import Server, Client, Connection, OwnedMessage, Config, ContextT, ServerApp
 
@@ -73,16 +73,6 @@ TEST_IP = "127.0.0.1"
 TEST_PORT = 50010    
 
 
-def default_on_client_connect(client: Connection, context: ContextT) -> bool:
-    return True
-
-def default_on_client_disconnect(client: Connection, context: ContextT):
-    pass
-
-def default_on_message(msg: OwnedMessage, context: ContextT):
-    pass
-
-
 class DefaulApp(ServerApp):
     def on_client_connect(self, client: Connection, context: ContextT) -> bool:
         return True
@@ -105,7 +95,8 @@ def server(config: Config):
 
     yield server
 
-    server.stop()
+    with suppress(RuntimeError):
+        server.stop()
 
 
 @contextmanager
@@ -114,12 +105,13 @@ def run_server(config: Config):
 
 
 def client():
-    server = Client()
-    server.connect(TEST_IP, TEST_PORT)
+    client = Client()
+    client.connect(TEST_IP, TEST_PORT)
 
-    yield server
+    yield client
 
-    server.shutdown()
+    with suppress(RuntimeError):
+        client.shutdown()
 
 
 @contextmanager

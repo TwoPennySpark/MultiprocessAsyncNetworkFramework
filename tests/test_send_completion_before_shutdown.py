@@ -46,7 +46,7 @@ def test_instant_reject(server: Server, client: Client):
     client.send(msg)
     client.send(msg)
 
-    with pytest.raises(RuntimeError):
+    with pytest.raises(ConnectionResetError):
         client.recv()
 
 
@@ -60,7 +60,7 @@ def test_send_then_reject(server: Server, client: Client):
     client.recv()
     client.recv()
     client.recv()
-    with pytest.raises(RuntimeError):
+    with pytest.raises(ConnectionResetError):
         client.recv()
 
         
@@ -77,7 +77,7 @@ def test_recv_send_then_disconnect(server: Server, client: Client):
     client.recv()
     client.recv()
     client.recv()
-    with pytest.raises(RuntimeError):
+    with pytest.raises(ConnectionResetError):
         client.recv()
 
 
@@ -93,7 +93,9 @@ class App:
         context["inQ"].put(msg.msg)
 
 
-def test_client_send_completion():
+# test for this issue:
+# https://blog.netherlabs.nl/articles/2009/01/18/the-ultimate-so_linger-page-or-why-is-my-tcp-not-reliable
+def test_client_send_full_completion():
     serverInQ = Queue()
     config = Config(App())
     config.context["inQ"] = serverInQ

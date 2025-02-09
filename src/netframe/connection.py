@@ -1,5 +1,4 @@
 from __future__ import annotations
-import asyncio.trsock
 from typing import Protocol, Coroutine
 from contextlib import suppress
 from enum import Enum, auto

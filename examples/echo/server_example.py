@@ -1,4 +1,4 @@
-from netframe import Server, Connection, OwnedMessage, Config, Message, ServerApp, ContextT
+from netframe import Server, Connection, OwnedMessage, Config, ServerApp, ContextT
 
 import os
 import time
@@ -20,7 +20,7 @@ class App(ServerApp):
 
 
 if __name__ == "__main__":
-    config = Config(App(), workerNum=1)
+    config = Config(App(), workerNum=8)
     server = Server(config)
     server.start()
 

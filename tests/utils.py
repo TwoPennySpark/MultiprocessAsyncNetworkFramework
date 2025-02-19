@@ -73,17 +73,20 @@ TEST_IP = "127.0.0.1"
 TEST_PORT = 50010    
 
 
-class DefaulApp(ServerApp):
-    def on_client_connect(self, client: Connection, context: ContextT) -> bool:
+class DefaultApp(ServerApp):
+    def __init__(self, context: ContextT):
+        pass
+
+    def on_client_connect(self, client: Connection) -> bool:
         return True
 
-    def on_client_disconnect(self, client: Connection, context: ContextT):
+    def on_client_disconnect(self, client: Connection):
         pass
 
-    def on_message(self, msg: OwnedMessage, context: ContextT):
+    def on_message(self, msg: OwnedMessage):
         pass
 
-DEFAULT_CONFIG = Config(DefaulApp(), ip=TEST_IP, port=TEST_PORT)
+DEFAULT_CONFIG = Config(DefaultApp, ip=TEST_IP, port=TEST_PORT)
 
 
 def server(config: Config):
@@ -117,12 +120,3 @@ def client():
 @contextmanager
 def run_client():
     yield from client()
-
-
-@contextmanager
-def run_threaded_client():
-    with (mock.patch("netframe.client.Process", threading.Thread),
-          mock.patch("netframe.client.socket"),
-          mock.patch("multiprocessing.queues.Queue.close"),
-          mock.patch("netframe.client_worker.win_socket_share")):    
-        yield from client()

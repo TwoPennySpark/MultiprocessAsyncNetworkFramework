@@ -4,22 +4,16 @@ import pytest
 
 from utils import run_server, DEFAULT_CONFIG
 
-from netframe import Server, Client, Message, OwnedMessage, ContextT
+from netframe import Server, Client, Message, OwnedMessage, ServerApp, ContextT
 
 
-def echo_on_message(msg: OwnedMessage, context: ContextT):
-    msg.owner.send(msg.msg)
+class test_basic_functionality_app(ServerApp):
+    def __init__(self, context: ContextT): ...
 
+    def on_message(self, msg: OwnedMessage):
+        msg.owner.send(msg.msg)
 
-def echo_delayed_on_message(msg: OwnedMessage, context: ContextT):
-    time.sleep(0.5)
-    msg.owner.send(msg.msg)
-
-
-@pytest.mark.parametrize("server", (
-                        (None, None, echo_on_message),
-                        ),
-                        indirect=True)
+@pytest.mark.parametrize("server", (test_basic_functionality_app,), indirect=True)
 def test_basic_functionality(server: Server, client: Client):
     msg = Message()
     msg.hdr.id = 0xff
@@ -29,10 +23,14 @@ def test_basic_functionality(server: Server, client: Client):
     assert msg == client.recv()
 
 
-@pytest.mark.parametrize("server", (
-                        (None, None, echo_delayed_on_message),
-                        ),
-                        indirect=True)
+class test_recv_timeout_app(ServerApp):
+    def __init__(self, context: ContextT): ...
+
+    def on_message(self, msg: OwnedMessage):
+        time.sleep(0.5)
+        msg.owner.send(msg.msg)
+
+@pytest.mark.parametrize("server", (test_recv_timeout_app,), indirect=True)
 def test_recv_timeout(server: Server, client: Client):
     client.send(Message())
     with pytest.raises(queue.Empty):

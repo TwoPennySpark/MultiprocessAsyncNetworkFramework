@@ -6,45 +6,54 @@ import logging
 
 from multiprocessing.synchronize import Event as EventClass
 
-from netframe.config import Config
+from netframe.config import Config, ServerApp
 from netframe.message import OwnedMessage
 from netframe.connection import Connection, ConnOwner
-from netframe.util import loop_policy_setup, setup_logging
+from netframe.util import loop_policy_setup
 if sys.platform == "win32":
     from netframe.util import win_socket_share
 
 
 class ServerWorker(ConnOwner):
     '''
-    Represents a process running an asyncio event loop.
-    Accepts and stores TCP connections.
+    Represents a process running an asyncio event loop
+    Accepts client connections. Invokes user-supplied code 
+    that handles the events occuring on worker's connections
     '''
 
     @staticmethod
     def run(listenSock: socket.socket, 
             config: Config,
             shouldStop: EventClass):
-        setup_logging()
 
         if sys.platform == "win32":
             listenSock = win_socket_share(listenSock)
 
-        worker = ServerWorker(listenSock, config, shouldStop)
+        try:
+            app = config.app(config.context)
+        except BaseException as e:
+            logger = logging.getLogger("netframe.error")
+            logger.error(f"Exception occured during initialization of user's application: {e}")
+            return
+
+        worker = ServerWorker(listenSock, config, app, shouldStop)
         worker.serve()
 
 
     def __init__(self, listenSock: socket.socket, 
                        config: Config,
+                       app: ServerApp,
                        shouldStop: EventClass):
         '''
         Parameters:
             listenSock: shared listen socket that is used to accept new connections
-            config:  configuration params
+            config: configuration params
+            app: user's application
             shouldStop: event that is set by Server to signal ServerWorkers to quit
         '''
         self._listenSock = listenSock
         self._config = config
-        self._app = self._config.app
+        self._app = app
         self._shouldStop = shouldStop
 
         self._connections = set[Connection]()  
@@ -76,7 +85,7 @@ class ServerWorker(ConnOwner):
         newConn = Connection(reader, writer, self)
 
         try:
-            allowConnection = self._app.on_client_connect(newConn, self._config.context)
+            allowConnection = self._app.on_client_connect(newConn)
         except BaseException as e:
             self._logger.error(f"Exception occured during execution of "
                                f"user-supplied 'on_client_connect' callback: {e}")
@@ -91,7 +100,7 @@ class ServerWorker(ConnOwner):
     # ConnOwner protocol method
     def process_msg(self, msg: OwnedMessage):
         try:
-            self._app.on_message(msg, self._config.context)
+            self._app.on_message(msg)
         except BaseException as e:
             self._logger.error(f"Exception occured during execution of "
                                f"user-supplied 'on_message' callback: {e}")
@@ -101,14 +110,14 @@ class ServerWorker(ConnOwner):
     def process_disconnect(self, conn: Connection):
         self._connections.discard(conn)
         try:
-            self._app.on_client_disconnect(conn, self._config.context)
+            self._app.on_client_disconnect(conn)
         except BaseException as e:
             self._logger.error(f"Exception occured during execution of "
                                f"user-supplied 'on_client_disconnect' callback: {e}")
 
 
     async def _shutdown(self):
-        self._logger.info(f"Server process({os.getpid()}) shutting down")
+        self._logger.info(f"Server process({os.getpid()}) is shutting down")
 
         self._server.close()
         self._listenSock.close()
@@ -118,4 +127,4 @@ class ServerWorker(ConnOwner):
 
         tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
         if len(tasks):
-            await asyncio.wait(tasks, timeout=self._config.gracefulShutdownTimeout)
+            await asyncio.wait(tasks)

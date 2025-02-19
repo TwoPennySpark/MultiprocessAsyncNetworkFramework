@@ -2,10 +2,11 @@ import queue
 import socket
 import logging
 
-from multiprocessing import Process, Pipe
+from multiprocessing import Pipe
 
 from netframe.message import Message
 from netframe.util import setup_logging
+from netframe.worker_pool import WorkerPool
 from netframe.client_worker import ClientWorker
 
 
@@ -13,19 +14,19 @@ class Client:
     def __init__(self):
         self._inQueueRead,  self._inQueueWrite  = Pipe()
         self._outQueueRead, self._outQueueWrite = Pipe()
-        self._worker: Process | None = None
+        self._worker = WorkerPool(workerNum=1)
 
         setup_logging()
         self._logger = logging.getLogger("netframe.error")
 
 
     def __del__(self):
-        if self._worker:
+        if self._worker.is_started():
             self.shutdown()
 
 
     def connect(self, ip: str, port: int):
-        if self._worker:
+        if self._worker.is_started():
             raise RuntimeError("Client already connected")
         
         # connect to server
@@ -37,10 +38,9 @@ class Client:
             self._logger.error(f"Connect failed: {e}")
             raise
 
-        # launch client worker process, pass newly created socket
-        self._worker = Process(target=ClientWorker.run, daemon=True,
-                             args=(serverSock, self._inQueueWrite, self._outQueueRead))
-        self._worker.start()
+        # launch client worker process
+        self._worker.start(target=ClientWorker.run, 
+                           args=(serverSock, self._inQueueWrite, self._outQueueRead))
 
         # close resources not needed in this proc
         self._inQueueWrite.close()
@@ -49,7 +49,7 @@ class Client:
 
 
     def send(self, msg: Message):
-        if not self._worker:
+        if not self._worker.is_started():
             raise RuntimeError("Client is not connected")
         
         try:
@@ -59,7 +59,7 @@ class Client:
         
 
     def recv(self, timeout: float | None=None) -> Message:
-        if not self._worker:
+        if not self._worker.is_started():
             raise RuntimeError("Client is not connected")
 
         try:
@@ -74,17 +74,13 @@ class Client:
 
     def shutdown(self, timeout: float | None=None):
         ''' 
-        Stop client worker process in timeout seconds
-        If timeout is reached and worker still active -
-        force shutdown it
+        Waits for client worker process to finish within timeout, 
+        shuts it down forcefully after timeout expires
         '''
-        if not self._worker:
+        if not self._worker.is_started():
             raise RuntimeError("Client is not connected")
         
         self._inQueueRead.close()
         self._outQueueWrite.close()
 
-        self._worker.join(timeout)
-        if self._worker.is_alive():
-            self._worker.kill()
-        self._worker = None
+        self._worker.stop(timeout)

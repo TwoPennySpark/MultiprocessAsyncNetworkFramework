@@ -10,17 +10,23 @@ from netframe.message import Message, OwnedMessage
 
 
 class ConnOwner(Protocol):
+    '''Connection owner - ServerWorker or ClientWorker'''
+
+    # called when a new message is received
     def process_msg(self, msg: OwnedMessage):
         pass
 
+    # called when connection is lost either due to a network 
+    # error or graceful TCP shutdown initiated by other party
+    # isn't called when shutdown is initiated by owner 
     def process_disconnect(self, conn: Connection):
         pass
 
 
 class Connection:
     '''
-    Represents TCP connection. Provides means for sending, receiving data and
-    closing the connection.
+    Represents TCP connection. Provides means for sending, 
+    receiving data and closing the connection.
     '''
 
     def __init__(self,
@@ -47,7 +53,7 @@ class Connection:
         except asyncio.CancelledError:
             return
         except (asyncio.IncompleteReadError, ConnectionResetError, ConnectionAbortedError):
-            self.shutdown(self.SHUTDOWN_REASON.CONNECTION_BREAKUP)
+            self._shutdown(self.SHUTDOWN_REASON.CONNECTION_BREAKUP)
             return
 
         self.recv()
@@ -61,15 +67,31 @@ class Connection:
         except asyncio.CancelledError:
             return
         except (ConnectionResetError, ConnectionAbortedError):
-            self.shutdown(self.SHUTDOWN_REASON.CONNECTION_BREAKUP)
+            self._shutdown(self.SHUTDOWN_REASON.CONNECTION_BREAKUP)
 
     
     class SHUTDOWN_REASON(Enum):
+        # owner initiated shutdown
         MANUAL = auto() 
+        # a network error occured or peer has closed the connection
         CONNECTION_BREAKUP = auto()
 
 
-    async def _shutdown(self, reason: SHUTDOWN_REASON):
+    def _shutdown(self, reason: SHUTDOWN_REASON):
+        tasksToCancel = [t for t in self._tasks 
+                        if t is not asyncio.current_task()]
+        # do not cancel scheduled send tasks in case of manual shutdown
+        if reason == self.SHUTDOWN_REASON.MANUAL:
+            tasksToCancel = [t for t in tasksToCancel
+                            if t.get_name() != self._send.__name__]
+        for task in tasksToCancel:
+            task.cancel()
+
+        self._schedule(self._ashutdown(reason))
+        self.isActive = False
+        
+
+    async def _ashutdown(self, reason: SHUTDOWN_REASON):
         allTasks = [t for t in self._tasks if t is not asyncio.current_task()]
         if len(allTasks):
             await asyncio.wait(allTasks)
@@ -115,18 +137,8 @@ class Connection:
         self._schedule(self._recv())
 
 
-    def shutdown(self, reason: SHUTDOWN_REASON = SHUTDOWN_REASON.MANUAL):
-        tasksToCancel = [t for t in self._tasks 
-                        if t is not asyncio.current_task()]
-        # do not cancel scheduled send tasks in case of manual shutdown
-        if reason == self.SHUTDOWN_REASON.MANUAL:
-            tasksToCancel = [t for t in tasksToCancel
-                            if t.get_name() != self._send.__name__]
-        for task in tasksToCancel:
-            task.cancel()
-
-        self._schedule(self._shutdown(reason))
-        self.isActive = False
+    def shutdown(self):
+        self._shutdown(self.SHUTDOWN_REASON.MANUAL)
 
 
     def addr(self) -> tuple[str, int]:

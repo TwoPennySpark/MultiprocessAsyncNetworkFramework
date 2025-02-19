@@ -5,14 +5,13 @@ import asyncio
 import logging
 import functools
 
-import multiprocessing.connection
 from multiprocessing import Pipe
 from multiprocessing.connection import wait, Connection as PipeHndl
 from contextlib import suppress
 
 from netframe.message import OwnedMessage
 from netframe.connection import Connection, ConnOwner
-from netframe.util import loop_policy_setup, setup_logging
+from netframe.util import loop_policy_setup
 if sys.platform == "win32":
     from netframe.util import win_socket_share
 
@@ -27,8 +26,7 @@ class ClientWorker(ConnOwner):
     def run(serverSock: socket.socket,
             inQueue:  PipeHndl,
             outQueue: PipeHndl):
-        setup_logging()
-
+        
         if sys.platform == "win32":
             serverSock = win_socket_share(serverSock)
 

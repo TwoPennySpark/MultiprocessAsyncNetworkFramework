@@ -4,8 +4,7 @@ import socket
 
 from multiprocessing import Process
 
-from netframe.message import Message
-from netframe.client import Client
+from netframe import Client, Message
 
 
 def client(id):
@@ -32,9 +31,9 @@ def client(id):
 
 if __name__ == "__main__":
     i = 0
-    for _ in range(1):
+    for _ in range(10):
         clientProcs: list[Process] = []
-        for _ in range(1):
+        for _ in range(10):
             proc = Process(target=client, args=(i,))
             proc.start()
             clientProcs.append(proc)

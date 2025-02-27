@@ -30,14 +30,19 @@ class Server:
         listenSock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             listenSock.bind((self._config.ip, self._config.port))
-        except Exception as e:
+        except OSError as e:
             self._logger.error(f"Failed to create listen socket: {e}")
             raise
+        listenSock.listen()
         listenSock.set_inheritable(True)
 
         # launch server worker processes
-        self._workers.start(target=ServerWorker.run, 
-                            args=(listenSock, self._config, self._stopEvent))
+        try:
+            self._workers.start(target=ServerWorker.run, 
+                                args=(listenSock, self._config, self._stopEvent))
+        except TypeError as e:
+            self._logger.error(f"Non-pickleable object in context: {e}")
+            raise
 
         # don't need listen socket in this proc any more
         listenSock.close()

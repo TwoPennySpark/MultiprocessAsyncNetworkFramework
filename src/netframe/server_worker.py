@@ -16,7 +16,7 @@ if sys.platform == "win32":
 
 class ServerWorker(ConnOwner):
     '''
-    Represents a process running an asyncio event loop
+    Represents a process running an asyncio event loop.
     Accepts client connections. Invokes user-supplied code 
     that handles the events occuring on worker's connections
     '''
@@ -72,8 +72,10 @@ class ServerWorker(ConnOwner):
 
         self._logger.info(f"Started server process({os.getpid()})")
 
-        while not self._shouldStop.is_set():
-            await asyncio.sleep(0.1)
+        # block until Server.stop() is called
+        loop = asyncio.get_event_loop()
+        waitForEvent = lambda event: event.wait()
+        await loop.run_in_executor(None, waitForEvent, self._shouldStop)
 
         await self._shutdown()
 

@@ -2,10 +2,11 @@ import time
 import multiprocessing
 
 from typing import Callable, Any
-from multiprocessing.context import SpawnProcess
+from multiprocessing.context import Process
 
 from netframe.util import setup_logging
 
+multiprocessing.allow_connection_pickling()
 
 def start(realTarget: Callable[..., Any], *args: Any):
     setup_logging()
@@ -15,15 +16,12 @@ def start(realTarget: Callable[..., Any], *args: Any):
 class WorkerPool:
     def __init__(self, workerNum: int):
         self._workerNum = workerNum
-        self._workers: list[SpawnProcess] = []
+        self._workers: list[Process] = []
 
 
     def start(self, target: Callable[..., Any], args: tuple[Any, ...]=()):
-        ctx = multiprocessing.get_context("spawn")
-
         for _ in range(self._workerNum):
-            proc = ctx.Process(target=start, args=(target, *args))
-            # proc = ctx.Process(target=target, args=args)
+            proc = Process(target=start, args=(target, *args), daemon=True)
             proc.start()
 
             self._workers.append(proc)

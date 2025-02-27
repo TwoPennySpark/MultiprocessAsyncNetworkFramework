@@ -3,18 +3,17 @@ from netframe import Server, Connection, OwnedMessage, Config, ServerApp, Contex
 import os
 import time
 
-
 class App(ServerApp):
     def __init__(self, context: ContextT):
         pass
 
     def on_client_connect(self, client: Connection) -> bool:
-        print(f"\n[{os.getpid()}]Client connected from {client.addr()}", flush=True)
+        print(f"\n[{os.getpid()}]Client connected from {client.addr()}")
         return True
 
 
     def on_client_disconnect(self, client: Connection):
-        print(f"[{os.getpid()}]Client from {client.addr()} disconnected", flush=True)
+        print(f"[{os.getpid()}]Client from {client.addr()} disconnected")
 
 
     def on_message(self, msg: OwnedMessage):
